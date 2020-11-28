@@ -1,0 +1,13 @@
+{
+    "https://gitee.com/kesin/GiteeAutoUpdate": [
+        "https://github.com/kesin/GiteeAutoUpdate.git"
+    ],
+    "https://gitee.com/kesin/taskover": [
+        "https://github.com/kesin/taskover.git",
+        "https://bitbucket.org/kesin/taskover.git",
+        "https://gitlab.com/kesin/taskover.git"
+    ],
+    "https://gitee.com/kesin/blogine": [
+        "https://github.com/kesin/blogine.git"
+    ]
+}

@@ -1,0 +1,23 @@
+{
+  "Port": 6666,
+  "GiteePrivateToken": "xxxxxxxxxxx",
+  "IpWhitelist": [
+    "192.168.2.3",
+    "192.168.2.4",
+    "192.168.2.5"
+  ],
+  "SyncUser": {
+    "github.com": {
+      "username": "GiteeAutoUpdate",
+      "password": "xxxxxxx"
+    },
+    "gitlab.com": {
+      "username": "GiteeAutoUpdate",
+      "password": "xxxxxxx"
+    },
+    "bitbucket.org": {
+      "username": "GiteeAutoUpdate",
+      "password": "xxxxxxx"
+    }
+  }
+}
