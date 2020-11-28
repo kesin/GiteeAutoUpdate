@@ -4,10 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/go-git/go-git/v5"
+	gitConfig "github.com/go-git/go-git/v5/config"
+	httpAuth "gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 )
 
 const gauVERSION = "1.0.0"
@@ -17,10 +22,10 @@ type Config struct {
 	GiteePrivateToken    string              `json:"GiteePrivateToken"`
 	UpdateWhitelistToken string              `json:"UpdateWhitelistToken"`
 	IpWhitelist          []string            `json:"IpWhitelist"`
-	SyncUser             map[string]SyncUser `json:"SyncUser"`
+	SyncUser             map[string]SyncInfo `json:"SyncUser"`
 }
 
-type SyncUser struct {
+type SyncInfo struct {
 	Username string `json:"Username"`
 	Password string `json:"Password"`
 }
@@ -52,7 +57,7 @@ func processArgs(args []string, configPath *string, config *Config) {
 }
 
 func usage() {
-	fmt.Printf(`GAU %s - GiteeAutoUpdate is a bot to do something useful for project on Gitee
+	fmt.Printf(`GAU %s - Gitee Auto Update is a bot to do something useful for project on Gitee
 
 Usage: Config your config.json and start GAU with command ./gau -c ./config.json &
 
@@ -119,7 +124,6 @@ func parseConfig(configPath *string, config *Config) {
 	}
 }
 
-
 func checkIpWhitelist(refer string) error {
 	referURL := strings.Split(refer, ":")
 	ip := referURL[0]
@@ -162,23 +166,117 @@ func isValidRepo(url string) bool {
 	return false
 }
 
-func refreshWhitelist() {
+func refreshWhitelist() error {
 	projects = nil
 	jsonFile, err := os.Open("./config/syncWhitelist")
 	if err != nil {
-		fmt.Printf("Whitelist file failed to open: %s \n", err.Error())
-		os.Exit(0)
+		msg := fmt.Sprintf("Whitelist file failed to open: %s \n", err.Error())
+		return errors.New(msg)
 	}
-	defer func() {
-		if err := jsonFile.Close(); err != nil {
-			fmt.Printf("Whitelist file failed to close: %s \n", err.Error())
-			os.Exit(0)
-		}
-	}()
+	defer jsonFile.Close()
 
 	jsonParser := json.NewDecoder(jsonFile)
 	if err := jsonParser.Decode(&projects); err != nil {
-		fmt.Printf("Failed to parse Whitelist: %s \n", err.Error())
-		os.Exit(0)
+		msg := fmt.Sprintf("Failed to parse Whitelist: %s \n", err.Error())
+		return errors.New(msg)
 	}
+	return nil
+}
+
+func updateWhitelist(url string) error {
+	res, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create("./config/syncWhitelist")
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	defer res.Body.Close()
+
+	_, _ = io.Copy(file, res.Body)
+	if err := refreshWhitelist(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func syncProject(url string) {
+	log.Printf("Process %s \n", url)
+	if len(projects[url]) < 1 {
+		log.Printf("Project %s have no target url\n", url)
+		return
+	}
+
+	// process each target
+	for _, t := range projects[url] {
+		syncMirror(url, t)
+	}
+}
+
+func syncMirror(url string, target string) {
+	// get path with namespace
+	updateRepo(url, target)
+	pushRepo(url, target)
+}
+
+func updateRepo(url string, target string) {
+	pn := url[18:]
+	repoPath := fmt.Sprintf("%s/%s", "./repos/", pn)
+
+	// fetch if repo exists
+	if r, err := git.PlainOpen(repoPath); err == nil {
+		r.Fetch(&git.FetchOptions{
+			RefSpecs: []gitConfig.RefSpec{"refs/*:refs/*"},
+		})
+	} else {
+		_, err := git.PlainClone(repoPath, true, &git.CloneOptions{
+			URL:               url,
+			RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
+		})
+		if err != nil {
+			log.Printf("Clone Repo Failed: %s %s Error: %s\n", repoPath, target, err.Error())
+		}
+	}
+}
+
+func pushRepo(url string, target string) {
+	pn := url[18:]
+	repoPath := fmt.Sprintf("%s/%s", "./repos/", pn)
+
+	// generate remote
+	host := strings.Split(target, "/")[2]
+
+	// generate auth
+	auth := generateAuth(host)
+
+	// create remote
+	r, _ := git.PlainOpen(repoPath)
+	_, _ = r.CreateRemote(&gitConfig.RemoteConfig{
+		Name: host,
+		URLs: []string{target},
+	})
+
+	// force sync
+	rHeadStrings := fmt.Sprintf("+refs/%s/*:refs/%s/*", "remotes/origin", "heads")
+	rTagStrings := fmt.Sprintf("+refs/%s/*:refs/%s/*", "tags", "tags")
+	rHeads := gitConfig.RefSpec(rHeadStrings)
+	rTags := gitConfig.RefSpec(rTagStrings)
+
+	err := r.Push(&git.PushOptions{RemoteName: host,
+		RefSpecs: []gitConfig.RefSpec{rHeads, rTags},
+		Auth:     auth})
+	if err != nil {
+		log.Printf("Error Push %s %s \n", err.Error(), host)
+	}
+}
+
+func generateAuth(host string) *httpAuth.BasicAuth {
+	username := config.SyncUser[host].Username
+	password := config.SyncUser[host].Password
+
+	return &httpAuth.BasicAuth{username, password}
 }

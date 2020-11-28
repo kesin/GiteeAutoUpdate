@@ -18,8 +18,11 @@ func main() {
 	args := os.Args
 	processArgs(args, &configPath, &config)
 
-	// init projects
-	refreshWhitelist()
+	// init projects list
+	if err := refreshWhitelist(); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
 	// start http server
 	http.Handle("/sync", RequestMiddleware(Sync))
@@ -53,6 +56,7 @@ func Sync(w http.ResponseWriter, r *http.Request) {
 	// judge and process
 	giteeUrl := hook.Repo["url"].(string)
 	if isValidRepo(giteeUrl) {
+		go syncProject(giteeUrl)
 		statusCodeWithMessage(&w, 200, "Received sync request, processing...")
 	} else {
 		statusCodeWithMessage(&w, 403, "This repo is not in whitelist, "+
@@ -75,7 +79,10 @@ func UpdateWhitelist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawWhitelist := fmt.Sprintf("%s/raw/master/syncWhitelist", hook.Repo["url"])
-	refreshWhitelist()
-	statusCodeWithMessage(&w, 200, rawWhitelist)
+	rawWhitelist := fmt.Sprintf("%s/raw/master/config/syncWhitelist", hook.Repo["url"])
+	if err := updateWhitelist(rawWhitelist); err != nil {
+		statusCodeWithMessage(&w, 500, err.Error())
+		return
+	}
+	statusCodeWithMessage(&w, 200, "Update success!")
 }
