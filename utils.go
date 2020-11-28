@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -43,7 +44,31 @@ func getHook(r *http.Request) (hook Hook, err error) {
 }
 
 func isValidRepo(url string) bool {
-	// url == whitelist.xxxx
-	return true
+	for k, _ := range projects {
+		if k == url {
+			return true
+		}
+	}
+	return false
 }
 
+func refreshWhitelist() {
+	projects = nil
+	jsonFile, err := os.Open("./syncWhitelist")
+	if err != nil {
+		fmt.Printf("Whitelist file failed to open: %s \n", err.Error())
+		os.Exit(0)
+	}
+	defer func() {
+		if err := jsonFile.Close(); err != nil {
+			fmt.Printf("Whitelist file failed to close: %s \n", err.Error())
+			os.Exit(0)
+		}
+	}()
+
+	jsonParser := json.NewDecoder(jsonFile)
+	if err := jsonParser.Decode(&projects); err != nil {
+		fmt.Printf("Failed to parse Whitelist: %s \n", err.Error())
+		os.Exit(0)
+	}
+}

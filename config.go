@@ -9,10 +9,11 @@ import (
 const gauVERSION = "1.0.0"
 
 type Config struct {
-	Port              int                 `json:"Port"`
-	GiteePrivateToken string              `json:"GiteePrivateToken"`
-	IpWhitelist       []string            `json:"IpWhitelist"`
-	SyncUser          map[string]SyncUser `json:"SyncUser"`
+	Port                 int                 `json:"Port"`
+	GiteePrivateToken    string              `json:"GiteePrivateToken"`
+	UpdateWhitelistToken string              `json:"UpdateWhitelistToken"`
+	IpWhitelist          []string            `json:"IpWhitelist"`
+	SyncUser             map[string]SyncUser `json:"SyncUser"`
 }
 
 type SyncUser struct {

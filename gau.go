@@ -7,13 +7,19 @@ import (
 	"os"
 )
 
-var config Config
+var (
+	config   Config
+	projects Projects
+)
 
 func main() {
-	// parse args and config file
+	// parse args and init config file
 	var configPath string
 	args := os.Args
 	processArgs(args, &configPath, &config)
+
+	// init projects
+	refreshWhitelist()
 
 	// start http server
 	http.Handle("/sync", RequestMiddleware(Sync))
@@ -23,4 +29,3 @@ func main() {
 	fmt.Printf("GAU server listening on port %d\n", config.Port)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
-
